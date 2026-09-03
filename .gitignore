@@ -14,3 +14,22 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
+
+# Secrets / credentials - never commit real tokens
+*.pem
+*.key
+*.p8
+*.p12
+*.crt
+*.cer
+*.credentials
+.envrc
+.gitleaks.toml.local
+credentials.json
+secrets.json
+token.txt
+tokens.txt
+*.token
+*.tokens
+*.secret
+*.secrets
