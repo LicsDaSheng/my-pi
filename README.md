@@ -28,11 +28,11 @@ pi install ./
 发布到 GitHub 后可使用：
 
 ```bash
-pi install git:github.com/<your-user>/my-pi
+pi install git:github.com/LicsDaSheng/my-pi
 ```
 
 如需固定版本，给仓库打 tag 后安装：
 
 ```bash
-pi install git:github.com/<your-user>/my-pi@v0.1.0
+pi install git:github.com/LicsDaSheng/my-pi@v0.1.0
 ```
