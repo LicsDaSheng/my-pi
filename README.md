@@ -21,11 +21,37 @@ prompts/     # Prompt 模板
 themes/      # 主题 JSON
 ```
 
+## 内置扩展
+
+- `extensions/operation-guard.ts` —— `rm` 操作门禁，命中后等待用户确认。
+- `extensions/context-mode/` —— 移植自 [mksglu/context-mode](https://github.com/mksglu/context-mode)，仅保留 pi 原生适配：
+  - 会话连续性：事件写入 SQLite（含 FTS5），压缩前生成续借快照，下一轮注入恢复上下文；
+  - 路由拦截：拦下 bash 里的内联 HTTP 客户端（fetch / curl / wget 等）以避免原始响应体灌进上下文；
+  - think-in-code 引导锚：大输出导向「写文件 + read/grep 抽需求片段」；
+  - 命令：`/ctx-stats`、`/ctx-doctor`，原生日志工具：`ctx_search`。
+
+  依赖 `better-sqlite3`（原生模块，含 FTS5）。
+
+## 内置技能
+
+- `skills/gitlab-mr-flow/` —— GitLab MR 流程。
+- `skills/tdd-workflow/` —— 测试驱动开发工作流。
+- `skills/no-negative-echo/` —— 防止最终交付中残留被否方案。
+- `skills/context-mode/` —— 上下文节约模式：对大输出走「写文件 + 按需读取」。
+
+
 ## 本地开发
 
 ```bash
+# 运行单元测试
+npm test
+
+# 类型检查
+npm run typecheck
+
 # 临时加载扩展测试
 pi -e ./extensions/operation-guard.ts
+pi -e ./extensions/context-mode/index.ts
 
 # 或安装为本地包
 pi install ./

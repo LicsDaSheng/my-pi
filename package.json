@@ -23,14 +23,20 @@
     ]
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "@types/better-sqlite3": "^7.6.13",
+    "typescript": "^5.9.2",
+    "vitest": "^5.0.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.11.1"
+  }
 }
