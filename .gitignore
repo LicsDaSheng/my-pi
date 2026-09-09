@@ -10,6 +10,7 @@ pnpm-debug.log*
 !.env.example
 .pi/git/
 .pi/npm/
+.pi/subagents/artifacts
 dist/
 build/
 coverage/

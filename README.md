@@ -19,6 +19,7 @@ extensions/  # pi TypeScript 扩展
 skills/      # 自定义技能（每个技能目录包含 SKILL.md）
 prompts/     # Prompt 模板
 themes/      # 主题 JSON
+handbook/    # 配置与使用手册
 ```
 
 ## 内置扩展
@@ -58,6 +59,10 @@ pi install ./
 ```
 
 修改后在 pi 中使用 `/reload` 重新加载。
+
+## 参考文档
+
+- [pi-subagents config.json 完整配置指南](./handbook/pi-subagents-config.md) —— 字段含义、使用场景与最佳实践。
 
 ## 从 GitHub 安装
 
