@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import harness from "./harness.js";
+import llmRetry from "./index.js";
 
 type Handler = (event: any, ctx: any) => Promise<void> | void;
 
-function installHarness() {
+function installExtension() {
   const handlers = new Map<string, Handler>();
   const pi = {
     on: vi.fn((event: string, handler: Handler) => handlers.set(event, handler)),
@@ -15,7 +15,7 @@ function installHarness() {
     ui: { notify: vi.fn() },
   };
 
-  harness(pi);
+  llmRetry(pi);
 
   return {
     ctx,
@@ -35,10 +35,10 @@ const assistantError = (errorMessage: string) => ({
 
 afterEach(() => vi.useRealTimers());
 
-describe("429 retry harness", () => {
+describe("llm-retry", () => {
   it("warns and resends the original user message after a final 429", async () => {
     vi.useFakeTimers();
-    const { ctx, pi, emit } = installHarness();
+    const { ctx, pi, emit } = installExtension();
 
     await emit("message_start", { message: userMessage("retry this") });
     await emit("turn_end", { message: assistantError("HTTP 429: Too Many Requests") });
@@ -53,7 +53,7 @@ describe("429 retry harness", () => {
   });
 
   it("does not retry non-429 errors", async () => {
-    const { ctx, pi, emit } = installHarness();
+    const { ctx, pi, emit } = installExtension();
 
     await emit("message_start", { message: userMessage("do not retry") });
     await emit("turn_end", { message: assistantError("HTTP 500: server error") });
@@ -64,7 +64,7 @@ describe("429 retry harness", () => {
   });
 
   it("clears a 429 candidate when a later core retry succeeds", async () => {
-    const { ctx, pi, emit } = installHarness();
+    const { ctx, pi, emit } = installExtension();
 
     await emit("message_start", { message: userMessage("core retries first") });
     await emit("turn_end", { message: assistantError("HTTP 429: rate limit") });
@@ -76,7 +76,7 @@ describe("429 retry harness", () => {
   });
 
   it("does not retry quota or billing 429 errors", async () => {
-    const { ctx, pi, emit } = installHarness();
+    const { ctx, pi, emit } = installExtension();
 
     await emit("message_start", { message: userMessage("do not retry") });
     await emit("turn_end", {
@@ -90,7 +90,7 @@ describe("429 retry harness", () => {
 
   it("retries each original user message at most once", async () => {
     vi.useFakeTimers();
-    const { pi, emit } = installHarness();
+    const { pi, emit } = installExtension();
 
     await emit("message_start", { message: userMessage("retry once") });
     await emit("turn_end", { message: assistantError("rate limit exceeded") });
