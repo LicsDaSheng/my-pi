@@ -44,7 +44,7 @@
 {
   "forkContext": {
     "mode": "pruned",
-    "model": "openai-codex/gpt-5.6-luna:max"
+    "model": "provider/model-id"
   }
 }
 ```
@@ -53,7 +53,7 @@
   - `full`：完整继承（可能超 token 预算）。
   - `pruned`：溢出部分由指定模型压缩为摘要。
 - **场景**：父会话很长，fork 后子 agent 需要知道上下文但装不下全部。
-- **最佳实践**：`pruned` 配合一个低成本模型（如 `gpt-5.6-luna:low`），避免 fork 把长对话的 token 吃光。
+- **最佳实践**：`pruned` 配合一个低成本模型，避免 fork 把长对话的 token 吃光；具体模型 ID 放在用户级配置中管理，不写入项目文档。
 
 ---
 
@@ -368,12 +368,12 @@
 ```json
 {
   "modelResponseAliases": {
-    "databricks-bedrock/ias-claude-opus-5": ["claude-opus-5"]
+    "provider/model-id": ["provider-returned-alias"]
   }
 }
 ```
 
-- **场景**：代理或网关返回的模型 ID 与请求不一致时（如 Bedrock 返回 `anthropic.claude-opus-5-20251001-v1:0`），用来声明等价性。
+- **场景**：代理或网关返回的模型 ID 与请求不一致时，用来声明等价性。
 - **最佳实践**：只有遇到 `model_verification_failed` 错误时才需要配置。
 
 ### `modelExclusions`（模型排除缓存）

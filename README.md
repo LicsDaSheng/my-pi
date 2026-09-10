@@ -17,7 +17,8 @@
 ```text
 extensions/  # pi TypeScript 扩展
 skills/      # 自定义技能（每个技能目录包含 SKILL.md）
-prompts/     # Prompt 模板
+prompts/     # Prompt 模板（含 /dev-plan）
+agents/      # pi-subagents 包级自定义 agent
 themes/      # 主题 JSON
 handbook/    # 配置与使用手册
 ```
@@ -41,14 +42,23 @@ handbook/    # 配置与使用手册
 - `skills/context-mode/` —— 上下文节约模式：对大输出走「写文件 + 按需读取」。
 
 
+## 开发方案工作流
+
+- `/dev-plan <原始需求>` —— 主会话编排 scout、development-designer 和 reviewer，桥接用户问卷，最多三次独立评审并复核最终版本。只交付方案，不自动编码。
+- 仅新增 `development-designer`，通过 `pi-subagents.agents` 注册；复用社区 subagents 和问卷工具，模型路由由用户级 pi settings 的 `subagents.agentOverrides` 管理。
+- [使用、更新与限制](./handbook/subagents/dev-plan-workflow.md)。
+
 ## 本地开发
 
 ```bash
-# 运行单元测试
+# 运行单元测试（包含 /dev-plan 静态契约校验）
 npm test
 
 # 类型检查
 npm run typecheck
+
+# 可选：显式指定 pi-subagents 源码或安装包根目录后，验证真实 package discovery
+PI_SUBAGENTS_ROOT=/absolute/path/to/pi-subagents npm run test -- tests/dev-plan.integration.test.ts
 
 # 临时加载扩展测试
 pi -e ./extensions/operation-guard.ts
@@ -58,11 +68,12 @@ pi -e ./extensions/context-mode/index.ts
 pi install ./
 ```
 
-修改后在 pi 中使用 `/reload` 重新加载。
+本地加载的文件修改后可在 pi 中使用 `/reload` 重新加载。my-pi 源码不等于 pi 的已安装副本：Git 安装需要在源码进入可更新版本后执行 `pi update --extensions` 更新，再重新加载；单独 `/reload` 不会同步另一源码工作区的未提交文件。
 
 ## 参考文档
 
-- [pi-subagents config.json 完整配置指南](./handbook/pi-subagents-config.md) —— 字段含义、使用场景与最佳实践。
+- [pi-subagents config.json 完整配置指南](./handbook/subagents/pi-subagents-config.md) —— 字段含义、使用场景与最佳实践。
+- [/dev-plan 开发方案工作流](./handbook/subagents/dev-plan-workflow.md) —— 用法、访谈恢复、评审闭环与产物契约。
 
 ## 从 GitHub 安装
 
