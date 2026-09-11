@@ -1,4 +1,4 @@
-export const KG_WEALTH_KNOWLEDGE_DIR = "~/Documents/wealth/knowledge";
+export const KG_WEALTH_KNOWLEDGE_DIR = "~/Documents/wealth/knowledge/Wikis";
 
 const FRAGMENT_TYPES =
   "doing-fragment | knowledge-fragment | decision-fragment | experience-fragment | research-fragment | review-fragment";
@@ -37,7 +37,7 @@ export function buildKgWealthPrompt(lastAssistantOutput: string): string {
 
 要求：
 - 如果目录不存在，请先创建目录。
-- 文件名规则：\`YYYY-MM-DD-HHmm-简短主题.md\`。
+- 文件名规则：\`简短主题.md\`。
 - 使用当前日期时间。
 - 简短主题应来自内容本身。
 - 文件名不要使用空格。
