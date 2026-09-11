@@ -8,7 +8,7 @@ my-pi 是配置源码，不是 pi 本体。需要已安装并启用社区 `pi-su
 
 源码中新增：
 - [`agents/development-designer.md`](../../agents/development-designer.md)：唯一新增 agent；通过 package.json 的 `pi-subagents.agents: ["./agents"]` 注册。不是不存在的 `pi.agents`。
-- [`prompts/dev-plan.md`](../../prompts/dev-plan.md)：主会话提示词入口，内含完整契约和评审 schema，不依赖目标 cwd 下的配套文件。
+- [`extensions/dev-plan/prompt.ts`](../../extensions/dev-plan/prompt.ts)：主会话提示词入口，内含完整契约和评审 schema，通过 dev-plan 扩展注册命令注入，不依赖目标 cwd 下的配套文件。
 
 Git 安装副本与此源码工作区不同。源码内容进入可更新的包版本后，需要用户在 pi 中执行 `pi update --extensions` 更新 my-pi 的安装副本，再按运行环境重新加载。`/reload` 不能把另一个源码工作区的未提交文件搬进 Git 安装副本。本次开发不执行更新、安装或修改全局配置；当前未提交内容不会因更新远程包自动生效。需要体验未提交版本时，由用户另行选择显式本地包安装方式。
 

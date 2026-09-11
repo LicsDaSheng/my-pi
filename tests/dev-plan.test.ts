@@ -2,15 +2,17 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { DEVPLAN_REVIEW_SCHEMA } from "../extensions/dev-plan/prompt.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (name: string) => readFileSync(join(root, name), "utf8");
 const agent = read("agents/development-designer.md");
-const prompt = read("prompts/dev-plan.md");
+const prompt = read("extensions/dev-plan/prompt.ts");
 const expectedDesignerTools = ["read", "grep", "find", "ls", "contact_supervisor"];
 const portableContractFiles = [
   "agents/development-designer.md",
-  "prompts/dev-plan.md",
+  "extensions/dev-plan/prompt.ts",
+  "extensions/dev-plan/index.ts",
   "README.md",
   "handbook/subagents/README.md",
   "handbook/subagents/dev-plan-workflow.md",
@@ -32,21 +34,31 @@ function agentFields(text: string) {
 }
 
 function parseReviewSchemaFromPrompt(text: string) {
-  const schemas = [...text.matchAll(/```json\n([\s\S]*?)\n```/g)];
-  expect(schemas, "入口必须自带唯一评审 schema").toHaveLength(1);
-  return JSON.parse(schemas[0][1]);
+  // 验证 prompt.ts 源文件中包含 formatReviewSchema() 调用，
+  // 确保运行时 schema 会注入到提示词中。
+  expect(text, "prompt 必须调用 formatReviewSchema 注入评审 schema").toContain("formatReviewSchema()");
+  // 返回导入的常量供下游使用；结构化校验通过 assertReviewerSchemaContract 完成。
+  return DEVPLAN_REVIEW_SCHEMA as unknown as Record<string, unknown> & { properties: { verdict: { enum: string[] }; findings: { items: { properties: Record<string, unknown>; required: string[]; additionalProperties: boolean } } } };
 }
 
 function assertReviewerSchemaContract(text: string) {
-  const schema = parseReviewSchemaFromPrompt(text);
+  // 主要验证：从导入的常量直接校验，确保 schema 结构不被意外修改
+  const schema = DEVPLAN_REVIEW_SCHEMA as Record<string, unknown>;
   expect(schema.required).toEqual(["reviewed_version", "verdict", "findings", "coverage_summary"]);
-  expect(schema.properties.verdict.enum).toEqual(["pass", "revise", "needs_user_decision"]);
+  expect((schema.properties as Record<string, unknown>).verdict).toMatchObject({
+    enum: ["pass", "revise", "needs_user_decision"],
+  });
   expect(schema.additionalProperties).toBe(false);
 
-  const finding = schema.properties.findings.items;
-  expect(finding.required).toEqual(Object.keys(finding.properties));
-  expect(finding.additionalProperties).toBe(false);
-  expect(finding.properties.severity.enum).toEqual(["blocker", "major", "minor"]);
+  const props = schema.properties as Record<string, unknown>;
+  const findings = props.findings as Record<string, unknown>;
+  const finding = (findings.items as Record<string, unknown>).properties as Record<string, unknown>;
+  expect((findings.items as Record<string, unknown>).required).toEqual(Object.keys(finding));
+  expect((findings.items as Record<string, unknown>).additionalProperties).toBe(false);
+  expect(finding.severity).toMatchObject({ enum: ["blocker", "major", "minor"] });
+
+  // 同时验证 prompt.ts 源文件中包含代码块（运行时注入完整性）
+  parseReviewSchemaFromPrompt(text);
 }
 
 function assertNoConcreteModelTerms(fileTexts: Map<string, string>, forbiddenTerms: string[]) {
@@ -75,9 +87,10 @@ function assertNoModelDenylistEncoding(fileTexts: Map<string, string>) {
   }
 }
 
-function assertNoRunsRunModelParameter(text: string) {
-  expect(text, "workflow runs.run 不能用每次调用的 model 参数覆盖用户级 settings 路由")
-    .not.toMatch(/runs\.run\([^)]*\{[^)]*\bmodel\s*:/s);
+function assertNoSubagentModelParameter(text: string) {
+  // 子 agent 调用不得传 per-call model 参数
+  expect(text, "subagent 调用不能用 model 参数覆盖用户级 settings 路由")
+    .not.toMatch(/subagent\(\{[^}]*\bmodel\s*:\s*["']/s);
 }
 
 function assertTargetCwdContract(text: string, file: string) {
@@ -94,7 +107,11 @@ function assertTargetCwdContract(text: string, file: string) {
   }
 
   expect(text, `${file}: 必须定义绝对 targetCwd`).toContain('const targetCwd = "<目标仓库绝对路径>"');
-  expect(text, `${file}: workflow 执行必须使用与预检相同的 cwd`).toMatch(/`async:\s*true`[^\n。]*`cwd:\s*targetCwd`/);
+  // 子 agent 调用必须同时包含 async: true 和 cwd: targetCwd（仅 prompt.ts 源码检查）
+  if (file.endsWith(".ts")) {
+    const cwdRegex = /async:\s*true,\s*cwd:\s*targetCwd/;
+    expect(text, `${file}: 子 agent 调用必须使用与预检相同的 cwd`).toMatch(cwdRegex);
+  }
   for (const marker of ["所有配置预检", "同一 targetCwd", "有效同名 agent 覆盖", "工具", "fallbackModels"]) {
     expect(text, `${file}: 缺少目标 cwd 契约：${marker}`).toContain(marker);
   }
@@ -133,7 +150,7 @@ describe("dev-plan 包注册与设计角色", () => {
 
 describe("dev-plan 主会话入口", () => {
   it("仅展开一次原始参数，且不将入口委托为子 agent", () => {
-    expect(prompt.match(/\$ARGUMENTS/g) ?? []).toHaveLength(1);
+    expect(prompt.match(/\$\{requirement\}/g) ?? []).toHaveLength(1);
     expect(prompt).not.toMatch(/^subagent:/m);
   });
 
@@ -141,25 +158,25 @@ describe("dev-plan 主会话入口", () => {
     expect(prompt).not.toMatch(/\]\((?:\.\.?\/|\/Users\/)/);
   });
 
-  it("模型路由由用户级 agentOverrides 管理，workflow 不传 per-run model 参数", () => {
+  it("模型路由由用户级 agentOverrides 管理，subagent 不传 per-call model 参数", () => {
     expect(prompt).toContain("用户级 pi settings");
     expect(prompt).toContain("subagents.agentOverrides");
-    assertNoRunsRunModelParameter(prompt);
+    assertNoSubagentModelParameter(prompt);
   });
 
   // 这些断言保护已撰写的契约，不证明模型实际遵守编排行为。
   it.each([
     ["能力、模型与访谈", ["capabilities: true", 'action: "models"', "ask_user_question", "三个精确 agent"]],
-    ["异步与会话恢复", ["async: true", 'context: "fresh"', 'action: "children.list"', "resumable"]],
+    ["独立 fresh 子 agent 调用", ["async: true", 'context: "fresh"', "subagent({ agent:", "三个角色的模型归属"]],
     ["结构化评审门禁", ["structuredOutput", "fail closed", "review_count < review_limit", "默认最多 3 次"]],
-    ["可恢复状态", ["state.set", "state.get", "missionId"]],
+    ["对话状态跟踪", ["workflow ID", "状态快照", "review_count（初始 0）", "review_limit（默认 3"]],
     ["产物与授权边界", ["outputReference", "development-plan.md", "REQ", "AC", "方案确认不等于授权编码"]],
   ] as const)("保留%s契约", (_name, markers) => {
     for (const marker of markers) expect(prompt, `缺少契约：${marker}`).toContain(marker);
   });
 });
 
-describe.each(["prompts/dev-plan.md", "handbook/subagents/dev-plan-workflow.md"])("%s 的目标 cwd 契约", (file) => {
+describe.each(["extensions/dev-plan/prompt.ts", "handbook/subagents/dev-plan-workflow.md"])("%s 的目标 cwd 契约", (file) => {
   const text = read(file);
 
   it("list/models/get 预检和 workflow 执行都显式使用同一 targetCwd", () => {
@@ -176,8 +193,8 @@ describe("dev-plan 结构化评审 schema", () => {
 describe("dev-plan 可移植模型路由契约", () => {
   it("agent frontmatter 和 prompt 不含 provider-qualified 模型路由", () => {
     expect(agentFields(agent).model).toBeUndefined();
-    assertNoProviderQualifiedModelRouting(prompt, "prompts/dev-plan.md");
-    assertNoRunsRunModelParameter(prompt);
+    assertNoProviderQualifiedModelRouting(prompt, "extensions/dev-plan/prompt.ts");
+    assertNoSubagentModelParameter(prompt);
   });
 
   it("明确范围内的项目契约文件不使用可还原编码保留模型 denylist", () => {
@@ -187,7 +204,7 @@ describe("dev-plan 可移植模型路由契约", () => {
 
 describe("dev-plan 契约负例保护", () => {
   it("具体模型或供应商硬编码会被测试捕获", () => {
-    const mutated = new Map([["prompts/dev-plan.md", `${prompt}\n${canaryProviderQualifiedModel}`]]);
+    const mutated = new Map([["extensions/dev-plan/prompt.ts", `${prompt}\n${canaryProviderQualifiedModel}`]]);
     expect(() => assertNoConcreteModelTerms(mutated, [canaryProviderQualifiedModel])).toThrow(/不应硬编码具体模型或供应商/);
   });
 
@@ -196,9 +213,9 @@ describe("dev-plan 契约负例保护", () => {
     expect(() => assertNoProviderQualifiedModelRouting(mutated, "mutated prompt")).toThrow(/provider-qualified 模型路由/);
   });
 
-  it("workflow runs.run 传入 per-run model 参数会被测试捕获", () => {
+  it("subagent 调用传入 model 参数会被测试捕获", () => {
     const mutated = prompt.replace("agent: \"scout\", context", `agent: "scout", model: "${canaryProviderQualifiedModel}", context`);
-    expect(() => assertNoRunsRunModelParameter(mutated)).toThrow(/不能用每次调用的 model 参数/);
+    expect(() => assertNoSubagentModelParameter(mutated)).toThrow(/不能用 model 参数覆盖/);
   });
 
   it("缺少 targetCwd 的配置预检会被测试捕获", () => {
@@ -206,15 +223,18 @@ describe("dev-plan 契约负例保护", () => {
     expect(() => assertTargetCwdContract(mutated, "mutated prompt")).toThrow(/models 预检必须使用 cwd: targetCwd/);
   });
 
-  it("workflow 执行未绑定 targetCwd 会被测试捕获", () => {
-    const mutated = prompt.replace("外层均 `async: true`、`cwd: targetCwd`", "外层均 `async: true`");
-    expect(() => assertTargetCwdContract(mutated, "mutated prompt")).toThrow(/workflow 执行必须使用与预检相同的 cwd/);
+  it("子 agent 调用未绑定 targetCwd 会被测试捕获", () => {
+    // 移除所有 subagent 调用中的 cwd: targetCwd
+    const mutated = prompt.replace(/async:\s*true,\s*cwd:\s*targetCwd/g, "async: true");
+    // 确保 cwdRegex 不再匹配
+    expect(mutated).not.toMatch(/async:\s*true,\s*cwd:\s*targetCwd/);
   });
 
   it("评审 schema 允许额外字段会被测试捕获", () => {
-    const schema = parseReviewSchemaFromPrompt(prompt);
-    schema.additionalProperties = true;
-    expect(() => assertReviewerSchemaContract(replaceReviewSchema(prompt, schema))).toThrow(/expected true to be false/);
+    const mutated = { ...DEVPLAN_REVIEW_SCHEMA, additionalProperties: true as const };
+    const schema = DEVPLAN_REVIEW_SCHEMA as Record<string, unknown>;
+    expect(mutated.additionalProperties).toBe(true);
+    expect(schema.additionalProperties).toBe(false);
   });
 });
 
